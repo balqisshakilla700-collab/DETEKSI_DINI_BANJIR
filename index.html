@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pemantau Tinggi Air</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #E9EEEF;
+    --surface: #F6F9F9;
+    --ink: #11303D;
+    --ink-soft: #4B6772;
+    --line: #C5D3D7;
+    --water: #2C7A96;
+    --s0: #2E8B6A;   /* normal */
+    --s1: #C99A2E;   /* waspada */
+    --s2: #D4692A;   /* siaga */
+    --s3: #BF3330;   /* bahaya */
+    --off: #7C8D93;
+    --state: var(--s0);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    line-height: 1.5;
+    padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+  }
+  body[data-state="0"] { --state: var(--s0); }
+  body[data-state="1"] { --state: var(--s1); }
+  body[data-state="2"] { --state: var(--s2); }
+  body[data-state="3"] { --state: var(--s3); }
+  body[data-offline="true"] { --state: var(--off); }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font: 700 1.25rem/1.2 "Bricolage Grotesque", sans-serif; margin: 0; letter-spacing: -0.01em; }
+  .conn { display: inline-flex; align-items: center; gap: 8px; font-size: .875rem; color: var(--ink-soft); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--off); }
+  body[data-offline="false"] .dot { background: var(--s0); }
+
+  .banner {
+    display: none; margin-bottom: 16px; padding: 12px 16px; border-left: 4px solid var(--s3);
+    background: #F6E3E1; font-size: .9375rem;
+  }
+  .banner.show { display: block; }
+  .banner.warn { border-color: var(--s1); background: #F5ECD3; }
+
+  .hero { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 40px; align-items: stretch; }
+
+  /* ---- tabung level air ---- */
+  .gauge { position: relative; height: 380px; padding: 8px 0; }
+  .tank {
+    position: absolute; left: 0; top: 8px; bottom: 8px; width: 96px;
+    border: 2px solid var(--ink); border-radius: 6px 6px 14px 14px; background: var(--surface); overflow: hidden;
+  }
+  .water {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0%;
+    background: var(--state); opacity: .88; transition: height 1.2s ease, background-color .6s ease;
+  }
+  .mark { position: absolute; left: 0; width: 100%; height: 0; border-top: 1.5px dashed var(--ink); }
+  .mark span { position: absolute; left: 112px; top: -.75em; font-size: .8125rem; color: var(--ink-soft); white-space: nowrap; }
+  .mark.m1 { border-color: var(--s1); } .mark.m2 { border-color: var(--s2); } .mark.m3 { border-color: var(--s3); }
+  .gauge .marks { position: absolute; left: 0; top: 8px; bottom: 8px; width: 100%; pointer-events: none; }
+  .marks .mark { left: 0; width: 96px; }
+  .marks .mark span { left: 110px; }
+
+  /* ---- bacaan utama ---- */
+  .reading { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+  .level { font: 700 clamp(4.5rem, 14vw, 8rem)/0.9 "Bricolage Grotesque", sans-serif; letter-spacing: -0.04em; color: var(--ink); }
+  .level small { font-size: .28em; font-weight: 500; letter-spacing: 0; color: var(--ink-soft); margin-left: .25em; }
+  .status {
+    display: inline-block; margin-top: 14px; padding: 6px 14px; border-radius: 999px;
+    background: var(--state); color: #fff; font-weight: 600; font-size: 1rem;
+  }
+  body[data-state="1"]:not([data-offline="true"]) .status { color: #20180A; }
+  .status.pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .status.pulse { animation: none; } .water { transition: none; } }
+
+  dl.facts { margin: 28px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
+  .facts div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .facts dt { color: var(--ink-soft); font-size: .9375rem; }
+  .facts dd { margin: 0; font-weight: 600; text-align: right; }
+
+  section.history { margin-top: 40px; }
+  section.history h2 { font: 700 1.0625rem/1.3 "Bricolage Grotesque", sans-serif; margin: 0 0 4px; }
+  section.history p { margin: 0 0 12px; color: var(--ink-soft); font-size: .875rem; }
+  .chartbox { background: var(--surface); border: 1px solid var(--line); padding: 8px; }
+  canvas { display: block; width: 100%; height: 280px; }
+
+  footer { margin-top: 28px; font-size: .8125rem; color: var(--ink-soft); }
+
+  @media (max-width: 720px) {
+    .hero { grid-template-columns: 1fr; gap: 24px; }
+    .gauge { height: 300px; max-width: 320px; }
+    dl.facts { grid-template-columns: 1fr; }
+  }
+  :focus-visible { outline: 3px solid var(--water); outline-offset: 2px; }
+</style>
+</head>
+<body data-state="0" data-offline="true">
+<div class="wrap">
+  <header>
+    <h1>Pemantau Tinggi Air</h1>
+    <span class="conn" role="status"><span class="dot"></span><span id="connText">Menghubungkan ke database…</span></span>
+  </header>
+
+  <div id="banner" class="banner" role="alert"></div>
+
+  <main>
+    <div class="hero">
+      <div class="gauge" aria-hidden="true">
+        <div class="tank"><div class="water" id="water"></div></div>
+        <div class="marks" id="marks"></div>
+      </div>
+
+      <div class="reading">
+        <div>
+          <div class="level" id="level" aria-live="polite">--<small>cm</small></div>
+          <span class="status" id="status">Menunggu data</span>
+        </div>
+        <dl class="facts">
+          <div><dt>Jarak sensor ke air</dt><dd id="fDist">-</dd></div>
+          <div><dt>Laju kenaikan</dt><dd id="fRate">-</dd></div>
+          <div><dt>Sirine dan lampu</dt><dd id="fSiren">-</dd></div>
+          <div><dt>Sinyal WiFi perangkat</dt><dd id="fRssi">-</dd></div>
+          <div><dt>Data terakhir</dt><dd id="fAge">-</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <section class="history">
+      <h2>Riwayat tinggi air</h2>
+      <p>120 catatan terakhir, satu catatan per menit atau saat status berubah.</p>
+      <div class="chartbox"><canvas id="chart" role="img" aria-label="Grafik riwayat tinggi air"></canvas></div>
+    </section>
+  </main>
+
+  <footer>Data dikirim ESP32 ke Firebase Realtime Database. Halaman ini hanya membaca data.</footer>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ===== ISI DENGAN CONFIG FIREBASE ANDA (Project settings > General > Your apps > Web) ===== */
+const firebaseConfig = {
+  apiKey: "ISI_API_KEY",
+  authDomain: "nama-project.firebaseapp.com",
+  databaseURL: "https://nama-project-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "nama-project"
+};
+/* ========================================================================================== */
+
+const STATE_NAME = ["Normal", "Waspada", "Siaga", "Bahaya"];
+const OFFLINE_AFTER_MS = 20000;   // perangkat dianggap mati jika 'seq' tidak berubah 20 detik
+
+const $ = id => document.getElementById(id);
+let latest = null, lastSeq = null, lastSeqAt = 0, history = [], dbConnected = false;
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+db.ref(".info/connected").on("value", s => { dbConnected = !!s.val(); renderConn(); });
+
+db.ref("monitoring/latest").on("value", snap => {
+  const d = snap.val();
+  if (!d) return;
+  latest = d;
+  if (d.seq !== lastSeq) { lastSeq = d.seq; lastSeqAt = Date.now(); }
+  render();
+}, err => showBanner("Gagal membaca database: " + err.message + ". Periksa aturan (rules) dan konfigurasi Firebase.", false));
+
+db.ref("monitoring/history").limitToLast(120).on("value", snap => {
+  const arr = [];
+  snap.forEach(c => arr.push(c.val()));
+  history = arr;
+  drawChart();
+});
+
+function isOffline() { return !latest || (Date.now() - lastSeqAt) > OFFLINE_AFTER_MS; }
+
+function showBanner(text, warn) {
+  const b = $("banner");
+  b.textContent = text || "";
+  b.classList.toggle("show", !!text);
+  b.classList.toggle("warn", !!warn);
+}
+
+function renderConn() {
+  const off = isOffline();
+  document.body.dataset.offline = off ? "true" : "false";
+  if (!dbConnected) $("connText").textContent = "Database terputus";
+  else if (!latest) $("connText").textContent = "Menunggu data pertama";
+  else $("connText").textContent = off ? "Perangkat tidak mengirim data" : "Perangkat terhubung";
+}
+
+function render() {
+  if (!latest) return;
+  const d = latest, off = isOffline();
+  const state = Math.max(0, Math.min(3, d.state | 0));
+  document.body.dataset.state = state;
+
+  $("level").innerHTML = Math.round(d.level) + "<small>cm</small>";
+  const st = $("status");
+  st.textContent = off ? "Data tidak terbaru" : (d.fault && state === 0 ? "Sensor bermasalah" : STATE_NAME[state]);
+  st.classList.toggle("pulse", !off && state >= 2);
+
+  $("fDist").textContent = d.dist.toFixed(1) + " cm";
+  const r = d.rate || 0;
+  $("fRate").textContent = (r > 0 ? "+" : "") + r.toFixed(1) + " cm/menit";
+  $("fSiren").textContent = d.siren ? "Berbunyi" : (d.muted ? "Dibungkam" : "Mati");
+  $("fRssi").textContent = d.rssi + " dBm";
+
+  // tabung & penanda ambang
+  const top = Math.max(d.thB * 1.2, d.level * 1.05, 1);
+  $("water").style.height = Math.min(100, d.level / top * 100) + "%";
+  const marks = $("marks");
+  marks.innerHTML = "";
+  [["m1", d.thW, "Waspada"], ["m2", d.thS, "Siaga"], ["m3", d.thB, "Bahaya"]].forEach(([cls, v, name]) => {
+    const m = document.createElement("div");
+    m.className = "mark " + cls;
+    m.style.bottom = (v / top * 100) + "%";
+    m.innerHTML = "<span>" + name + " " + v + " cm</span>";
+    marks.appendChild(m);
+  });
+
+  if (off) showBanner("Tidak ada data baru dari perangkat selama lebih dari 20 detik. Cek daya dan WiFi perangkat.", true);
+  else if (d.fault) showBanner("Sensor ultrasonik tidak memberikan data valid. Angka tinggi air bisa tidak akurat. Cek kabel RS485 dan sensor.", false);
+  else showBanner("");
+
+  renderConn();
+  renderAge();
+  drawChart();
+}
+
+function renderAge() {
+  if (!latest) return;
+  const s = Math.round((Date.now() - lastSeqAt) / 1000);
+  $("fAge").textContent = s < 5 ? "Baru saja" : s < 60 ? s + " detik lalu" : Math.round(s / 60) + " menit lalu";
+}
+setInterval(() => { if (latest) { renderAge(); render(); } }, 5000);
+setInterval(renderAge, 1000);
+
+/* ---------- grafik ---------- */
+function drawChart() {
+  const cv = $("chart");
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  const pad = { l: 44, r: 12, t: 12, b: 26 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+
+  if (history.length < 2) {
+    c.fillStyle = col("--ink-soft"); c.font = "14px 'Public Sans', sans-serif";
+    c.fillText("Riwayat belum cukup untuk digambar.", pad.l, h / 2);
+    return;
+  }
+
+  const th = latest ? [latest.thW, latest.thS, latest.thB] : [100, 150, 200];
+  const maxV = Math.max(th[2] * 1.15, ...history.map(p => p.level)) ;
+  const y = v => pad.t + ph - (v / maxV) * ph;
+  const x = i => pad.l + (i / (history.length - 1)) * pw;
+
+  // pita zona
+  const bands = [[0, th[0], null], [th[0], th[1], col("--s1")], [th[1], th[2], col("--s2")], [th[2], maxV, col("--s3")]];
+  bands.forEach(([a, b, color]) => {
+    if (!color) return;
+    c.globalAlpha = .12; c.fillStyle = color;
+    c.fillRect(pad.l, y(b), pw, y(a) - y(b));
+    c.globalAlpha = 1;
+  });
+
+  // sumbu Y
+  c.font = "12px 'Public Sans', sans-serif"; c.fillStyle = col("--ink-soft"); c.strokeStyle = col("--line"); c.lineWidth = 1;
+  const step = maxV > 250 ? 50 : 25;
+  for (let v = 0; v <= maxV; v += step) {
+    c.beginPath(); c.moveTo(pad.l, y(v)); c.lineTo(w - pad.r, y(v)); c.stroke();
+    c.textAlign = "right"; c.fillText(v, pad.l - 6, y(v) + 4);
+  }
+
+  // label waktu
+  c.textAlign = "center";
+  [0, Math.floor((history.length - 1) / 2), history.length - 1].forEach(i => {
+    const t = history[i].t;
+    if (!t) return;
+    const dt = new Date(t * 1000);
+    c.fillText(dt.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), x(i), h - 6);
+  });
+
+  // garis level
+  c.strokeStyle = col("--water"); c.lineWidth = 2.5; c.lineJoin = "round";
+  c.beginPath();
+  history.forEach((p, i) => i ? c.lineTo(x(i), y(p.level)) : c.moveTo(x(i), y(p.level)));
+  c.stroke();
+
+  // titik terakhir
+  const last = history[history.length - 1];
+  c.fillStyle = col("--ink");
+  c.beginPath(); c.arc(x(history.length - 1), y(last.level), 4, 0, Math.PI * 2); c.fill();
+}
+window.addEventListener("resize", drawChart);
+</script>
+</body>
+</html>
